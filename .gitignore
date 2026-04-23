@@ -1,0 +1,44 @@
+# C++ build outputs
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.stackdump
+
+# C++ build directories and generated files
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+Makefile
+makedep*
+libtool
+aclocal.m4
+autom4te.cache/
+m4/
+
+# Go build outputs
+*.test
+bin/
+pkg/
+
+# Go coverage and profiling
+coverage.out
+*.coverprofile
+
+# Go workspace/vendor
+vendor/
+go.work.sum
+
+# Editor/IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
