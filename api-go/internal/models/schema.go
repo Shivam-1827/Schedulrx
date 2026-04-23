@@ -14,12 +14,14 @@ type Task struct {
 	BurstTime   float64 `json:"burst_time"`
 	Priority    int     `json:"priority"`
 	TaskType    string  `json:"task_type"`
+	Deadline    float64 `json:"deadline"`
 }
 
 type WorkloadSettings struct {
 	Algorithm            string  `json:"algorithm"`
 	Quantum              float64 `json:"quantum"`
 	ContextSwitchPenalty float64 `json:"context_switch_penalty"`
+	NumCores             int     `json:"num_cores"`
 }
 
 type SimulationRequest struct {
