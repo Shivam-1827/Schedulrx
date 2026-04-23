@@ -1,17 +1,19 @@
 {
-    "workload_id": "uuid",
-    "settings": {
-        "algorithm": "RR",
-        "quantum": 2.0,
-        "num_cores": 1
-    },
-    "tasks": [
-        {
-            "id": 1,
-            "arrival_time": 0.0,
-            "burst_time": 10.5,
-            "priority": 1,
-            "task_type": "CPU_BOUND"
-        }
-    ]
+  "workload_id": "req-1234-5678",
+  "settings": {
+    "algorithm": "SMP",
+    "quantum": 2.0,
+    "context_switch_penalty": 0.1,
+    "num_cores": 4
+  },
+  "tasks": [
+    {
+      "id": "task-1",
+      "arrival_time": 0.0,
+      "burst_time": 10.5,
+      "priority": 1,
+      "task_type": "CPU_BOUND",
+      "deadline": 15.0
+    }
+  ]
 }

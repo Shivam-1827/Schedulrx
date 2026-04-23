@@ -8,6 +8,8 @@
 #include "algorithms/sjf.hpp"
 #include "algorithms/rr.hpp"
 #include "algorithms/mlfq.hpp"
+#include "algorithms/edf.hpp"
+#include "multicore/smp_orchestrator.hpp"
 
 namespace schedulrx::core {
 
@@ -28,6 +30,8 @@ namespace schedulrx::core {
             if (algorithm_name == "SJF")  return std::make_unique<SJFScheduler>();
             if (algorithm_name == "RR")   return std::make_unique<RRScheduler>();
             if (algorithm_name == "MLFQ") return std::make_unique<MLFQScheduler>();
+            if (algorithm_name == "EDF")  return std::make_unique<EDFScheduler>();
+            if (algorithm_name == "SMP")  return std::make_unique<SMPWorkStealingScheduler>();
             
             throw std::invalid_argument("Unknown scheduling algorithm requested: " + algorithm_name);
         }

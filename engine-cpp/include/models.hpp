@@ -26,16 +26,18 @@ namespace schedulrx::models{
         double waiting_time = 0.0;
         double response_time = -1.0;
         double turnaround_time = 0.0;
+        double deadline = 0.0;
         int context_switches = 0;
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Process, id, arrival_time, burst_time, priority, task_type)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Process, id, arrival_time, burst_time, priority, task_type, deadline)
     };
 
     struct WorkloadSettings {
         std::string algorithm;
         double quantum = 0.0;
         double context_switch_penalty = 0.0;
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(WorkloadSettings, algorithm, quantum, context_switch_penalty)
+        int num_cores = 1;
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(WorkloadSettings, algorithm, quantum, context_switch_penalty, num_cores)
     };
 
     struct SimulationResult {
