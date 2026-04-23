@@ -9,6 +9,7 @@
 #include "algorithms/rr.hpp"
 #include "algorithms/mlfq.hpp"
 #include "algorithms/edf.hpp"
+#include "algorithms/adaptive.hpp"
 #include "multicore/smp_orchestrator.hpp"
 
 namespace schedulrx::core {
@@ -32,6 +33,7 @@ namespace schedulrx::core {
             if (algorithm_name == "MLFQ") return std::make_unique<MLFQScheduler>();
             if (algorithm_name == "EDF")  return std::make_unique<EDFScheduler>();
             if (algorithm_name == "SMP")  return std::make_unique<SMPWorkStealingScheduler>();
+            if (algorithm_name == "ADAPTIVE") return std::make_unique<AdaptiveScheduler>();
             
             throw std::invalid_argument("Unknown scheduling algorithm requested: " + algorithm_name);
         }
