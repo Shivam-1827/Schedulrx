@@ -1,73 +1,74 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"runtime"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"github.com/Shivam-1827/Schedulrx/internal/handlers"
 	"github.com/Shivam-1827/Schedulrx/internal/models"
+	"github.com/Shivam-1827/Schedulrx/internal/queue"
 	"github.com/Shivam-1827/Schedulrx/internal/worker"
 )
 
 func main() {
-	// 1. Configuration via Environment Variables
+	// 1. Configs
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		// Fallback for local development
 		dsn = "host=localhost user=postgres password=postgres dbname=schedulrx port=5432 sslmode=disable"
 	}
-
+	redisAddr := os.Getenv("REDIS_URL")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
 	enginePath := os.Getenv("ENGINE_PATH")
 	if enginePath == "" {
-		// Fallback assuming we run this from the api-go directory and compiled C++ in engine-cpp/build
 		enginePath = "../engine-cpp/build/engine_main"
 	}
 
-	// 2. Initialize Database
+	// 2. Initialize PostgreSQL
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to PG: %v", err)
 	}
+	db.AutoMigrate(&models.RunRecord{})
 
-	// Auto-migrate the database schema
-	err = db.AutoMigrate(&models.RunRecord{})
-	if err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+	// 3. Initialize Redis
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
+	jobQueue := queue.NewRedisQueue(rdb)
 
-	// 3. Initialize Worker Bridge & Handlers
+	// 4. Start Worker Pool
 	bridge := worker.NewEngineBridge(enginePath)
-	api := &handlers.APIHandler{
-		DB:     db,
-		Bridge: bridge,
-	}
-
-	// 4. Setup Gin Router
-	r := gin.Default()
+	workerCores := runtime.NumCPU() // Optimize pool size based on available cores
+	pool := worker.NewPoolManager(rdb, jobQueue, bridge, db, workerCores)
 	
-	// Middlewares
-	r.Use(gin.Recovery())
-	r.Use(gin.Logger())
+	// Start pool in the background
+	ctx := context.Background() // In a real app, use signal.NotifyContext for graceful shutdown
+	go pool.Start(ctx)
 
-	// Routes
+	// 5. Setup Handlers & Router
+	asyncHandler := &handlers.AsyncHandler{Queue: jobQueue}
+	
+	r := gin.Default()
 	v1 := r.Group("/api/v1")
 	{
-		v1.GET("/health", api.HealthCheck)
-		v1.POST("/simulate", api.Simulate)
+		v1.POST("/simulate/async", asyncHandler.SubmitJob)
+		v1.GET("/results/:job_id", asyncHandler.PollResult)
 	}
 
-	// 5. Start Server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	
-	log.Printf("Starting SchedulrX API Gateway on port %s...", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
+	log.Printf("API Gateway active on port %s", port)
+	r.Run(":" + port)
 }
