@@ -55,14 +55,18 @@ func main() {
 	ctx := context.Background() // In a real app, use signal.NotifyContext for graceful shutdown
 	go pool.Start(ctx)
 
-	// 5. Setup Handlers & Router
 	asyncHandler := &handlers.AsyncHandler{Queue: jobQueue}
+	syncHandler := &handlers.APIHandler{DB: db, Bridge: bridge}
+	compareHandler := &handlers.CompareHandler{Bridge: bridge}
 	
 	r := gin.Default()
 	v1 := r.Group("/api/v1")
 	{
-		v1.POST("/simulate/async", asyncHandler.SubmitJob)
-		v1.GET("/results/:job_id", asyncHandler.PollResult)
+		v1.GET("/health", syncHandler.HealthCheck)
+		v1.POST("/simulate", syncHandler.Simulate) // Sync
+		v1.POST("/simulate/async", asyncHandler.SubmitJob) // Async
+		v1.GET("/results/:job_id", asyncHandler.PollResult) // Polling
+		v1.POST("/compare", compareHandler.CompareAlgorithms) // Parallel Fan-out
 	}
 
 	port := os.Getenv("PORT")
