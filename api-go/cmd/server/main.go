@@ -15,6 +15,7 @@ import (
 	"github.com/Shivam-1827/Schedulrx/internal/models"
 	"github.com/Shivam-1827/Schedulrx/internal/queue"
 	"github.com/Shivam-1827/Schedulrx/internal/worker"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -58,8 +59,12 @@ func main() {
 	asyncHandler := &handlers.AsyncHandler{Queue: jobQueue}
 	syncHandler := &handlers.APIHandler{DB: db, Bridge: bridge}
 	compareHandler := &handlers.CompareHandler{Bridge: bridge}
+	recommendHandler := &handlers.RecommendHandler{}
 	
 	r := gin.Default()
+
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	v1 := r.Group("/api/v1")
 	{
 		v1.GET("/health", syncHandler.HealthCheck)
@@ -67,6 +72,7 @@ func main() {
 		v1.POST("/simulate/async", asyncHandler.SubmitJob) // Async
 		v1.GET("/results/:job_id", asyncHandler.PollResult) // Polling
 		v1.POST("/compare", compareHandler.CompareAlgorithms) // Parallel Fan-out
+		v1.POST("/recommend", recommendHandler.RecommendAlgorithm)
 	}
 
 	port := os.Getenv("PORT")
