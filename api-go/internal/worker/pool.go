@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
@@ -101,6 +102,11 @@ func (pm *PoolManager) processJob(ctx context.Context, workerID int, job queue.A
 		AvgTurnaroundTime: simResult.AvgTurnaroundTime,
 		Throughput:        simResult.Throughput,
 		TotalTime:         simResult.TotalTime,
+	}
+	if parsedID, parseErr := uuid.Parse(job.JobID); parseErr == nil {
+		record.ID = parsedID
+	} else {
+		log.Printf("Worker %d invalid JobID %s for DB record ID: %v", workerID, job.JobID, parseErr)
 	}
 	if err := pm.db.Create(&record).Error; err != nil {
 		log.Printf("Worker %d failed to save Job %s to DB: %v", workerID, job.JobID, err)

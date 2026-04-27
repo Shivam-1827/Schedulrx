@@ -12,7 +12,7 @@ RUN mkdir -p engine-cpp/build && cd engine-cpp/build && \
     cmake .. && make
 
 
-FROM golang:1.21 AS go-builder
+FROM golang:1.25 AS go-builder
 
 WORKDIR /build-go
 COPY api-go/go.mod api-go/go.sum ./

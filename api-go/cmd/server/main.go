@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -14,6 +16,7 @@ import (
 	"github.com/Shivam-1827/Schedulrx/internal/handlers"
 	"github.com/Shivam-1827/Schedulrx/internal/models"
 	"github.com/Shivam-1827/Schedulrx/internal/queue"
+	"github.com/Shivam-1827/Schedulrx/internal/telemetry"
 	"github.com/Shivam-1827/Schedulrx/internal/worker"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -51,26 +54,42 @@ func main() {
 	bridge := worker.NewEngineBridge(enginePath)
 	workerCores := runtime.NumCPU() // Optimize pool size based on available cores
 	pool := worker.NewPoolManager(rdb, jobQueue, bridge, db, workerCores)
-	
+
 	// Start pool in the background
 	ctx := context.Background() // In a real app, use signal.NotifyContext for graceful shutdown
 	go pool.Start(ctx)
 
-	asyncHandler := &handlers.AsyncHandler{Queue: jobQueue}
+	asyncHandler := &handlers.AsyncHandler{Queue: jobQueue, DB: db}
 	syncHandler := &handlers.APIHandler{DB: db, Bridge: bridge}
 	compareHandler := &handlers.CompareHandler{Bridge: bridge}
 	recommendHandler := &handlers.RecommendHandler{}
-	
+
 	r := gin.Default()
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		duration := time.Since(start).Seconds()
+
+		path := c.FullPath()
+		if path == "" {
+			path = c.Request.URL.Path
+		}
+
+		telemetry.HttpRequestsTotal.WithLabelValues(path, c.Request.Method, strconv.Itoa(c.Writer.Status())).Inc()
+
+		if path == "/api/v1/simulate" || path == "/api/v1/compare" {
+			telemetry.SimulationDuration.WithLabelValues("HTTP_SYNC").Observe(duration)
+		}
+	})
 
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := r.Group("/api/v1")
 	{
 		v1.GET("/health", syncHandler.HealthCheck)
-		v1.POST("/simulate", syncHandler.Simulate) // Sync
-		v1.POST("/simulate/async", asyncHandler.SubmitJob) // Async
-		v1.GET("/results/:job_id", asyncHandler.PollResult) // Polling
+		v1.POST("/simulate", syncHandler.Simulate)            // Sync
+		v1.POST("/simulate/async", asyncHandler.SubmitJob)    // Async
+		v1.GET("/results/:job_id", asyncHandler.PollResult)   // Polling
 		v1.POST("/compare", compareHandler.CompareAlgorithms) // Parallel Fan-out
 		v1.POST("/recommend", recommendHandler.RecommendAlgorithm)
 	}

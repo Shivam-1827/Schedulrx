@@ -32,7 +32,7 @@ func (h *CompareHandler) CompareAlgorithms(c *gin.Context) {
 
 	// Algorithms we want to race against each other
 	algorithms := []string{"FCFS", "SJF", "RR", "MLFQ"}
-	
+
 	// Channels and WaitGroups for concurrent execution
 	var wg sync.WaitGroup
 	resultChan := make(chan *models.SimulationResult, len(algorithms))
@@ -41,14 +41,14 @@ func (h *CompareHandler) CompareAlgorithms(c *gin.Context) {
 	// 1. Fan-Out: Launch a goroutine for each algorithm
 	for _, algo := range algorithms {
 		wg.Add(1)
-		
+
 		go func(algorithm string) {
 			defer wg.Done()
-			
+
 			// Create a specific request for this algorithm
 			req := baseReq
 			req.Settings.Algorithm = algorithm
-			
+
 			// Use a bounded context to prevent hanging goroutines
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -67,17 +67,20 @@ func (h *CompareHandler) CompareAlgorithms(c *gin.Context) {
 	close(resultChan)
 	close(errorChan)
 
-	// Check if any errors occurred during the fan-out
-	if len(errorChan) > 0 {
-		err := <-errorChan
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "One or more simulations failed", "details": err.Error()})
-		return
-	}
-
-	// 3. Fan-In: Collect and aggregate results
+	// 3. Fan-In: Collect and aggregate results and errors
 	var results []models.SimulationResult
+	var failures []string
+
 	for res := range resultChan {
 		results = append(results, *res)
+	}
+	for err := range errorChan {
+		failures = append(failures, err.Error())
+	}
+
+	if len(results) == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "All simulations failed", "details": failures})
+		return
 	}
 
 	// 4. Rank the algorithms based on Average Turnaround Time (lowest is best)
@@ -85,13 +88,15 @@ func (h *CompareHandler) CompareAlgorithms(c *gin.Context) {
 		return results[i].AvgTurnaroundTime < results[j].AvgTurnaroundTime
 	})
 
-	// Optional: Flag the "Winner"
-	winner := results[0].AlgorithmUsed
-
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"workload_id": baseReq.WorkloadID,
 		"tasks_count": len(baseReq.Tasks),
-		"winner":      winner,
+		"winner":      results[0].AlgorithmUsed,
 		"rankings":    results,
-	})
+	}
+	if len(failures) > 0 {
+		response["warnings"] = failures
+	}
+
+	c.JSON(http.StatusOK, response)
 }

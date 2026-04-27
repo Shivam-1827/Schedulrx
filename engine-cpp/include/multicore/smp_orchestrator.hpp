@@ -35,12 +35,14 @@ namespace schedulrx::core {
             std::sort(processes.begin(), processes.end(), 
                 [](const models::Process& a, const models::Process& b) { return a.arrival_time < b.arrival_time; });
 
+            for (auto& p : processes) p.remaining_time = p.burst_time;
+
             size_t index = 0;
             size_t n = processes.size();
             size_t completed = 0;
             double global_time = 0.0;
 
-            // Simulate tick-by-tick (Event driven simplified for SMP)
+            // Event-based simulation loop to avoid O(tasks x time) behavior
             while (completed < n) {
                 
                 // 1. Distribute new arrivals (Round Robin to core queues)
@@ -74,15 +76,16 @@ namespace schedulrx::core {
                     }
                 }
 
-                // 3. Execution Phase (1 unit of time/quantum per active core)
-                double time_step = 1.0; // Simulate 1 tick
+                // 3. Execution Phase (Dynamic Time Step calculation)
+                double time_step = 1e9;
                 bool cpu_active = false;
 
+                // Pass 1: Activate cores and find shortest remaining runtime among active tasks
                 for (int i = 0; i < num_cores; i++) {
                     if (cores[i].active_process == nullptr && !cores[i].local_queue.empty()) {
                         cores[i].active_process = cores[i].local_queue.front();
                         cores[i].local_queue.pop_front();
-                        
+
                         if (cores[i].active_process->start_time == -1.0) {
                             cores[i].active_process->start_time = global_time;
                             cores[i].active_process->response_time = global_time - cores[i].active_process->arrival_time;
@@ -91,16 +94,26 @@ namespace schedulrx::core {
 
                     if (cores[i].active_process != nullptr) {
                         cpu_active = true;
+                        time_step = std::min(time_step, cores[i].active_process->remaining_time);
+                    }
+                }
+
+                // Pass 2: If a new task arrives earlier, execute only until that event
+                if (index < n && processes[index].arrival_time < (global_time + time_step)) {
+                    time_step = processes[index].arrival_time - global_time;
+                }
+
+                // Pass 3: Execute each active core for the chosen time slice
+                for (int i = 0; i < num_cores; i++) {
+                    if (cores[i].active_process != nullptr) {
                         models::Process* p = cores[i].active_process;
-                        
-                        double exec = std::min(time_step, p->remaining_time);
-                        p->remaining_time -= exec;
-                        cores[i].current_time += exec;
+                        p->remaining_time -= time_step;
+                        cores[i].current_time += time_step;
 
-                        result.gantt_chart.emplace_back(p->id + "_core" + std::to_string(i), global_time, global_time + exec);
+                        result.gantt_chart.emplace_back(p->id + "_core" + std::to_string(i), global_time, global_time + time_step);
 
-                        if (p->remaining_time <= 0) {
-                            p->completion_time = global_time + exec;
+                        if (p->remaining_time <= 0.00001) {
+                            p->completion_time = global_time + time_step;
                             p->turnaround_time = p->completion_time - p->arrival_time;
                             p->waiting_time = p->turnaround_time - p->burst_time;
                             cores[i].active_process = nullptr;

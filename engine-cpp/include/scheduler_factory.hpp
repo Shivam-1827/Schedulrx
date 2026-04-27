@@ -2,8 +2,23 @@
 #include "models.hpp"
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
-// Include all algorithm headers
+namespace schedulrx::core {
+
+    // 1. DEFINE THE INTERFACE FIRST
+    class IScheduler {
+    public:
+        virtual ~IScheduler() = default;
+        virtual models::SimulationResult simulate(
+            std::vector<models::Process> processes, 
+            const models::WorkloadSettings& settings,
+            const std::string& workload_id
+        ) = 0;
+    };
+}
+
+// 2. INCLUDE THE ALGORITHMS (They now know what IScheduler is)
 #include "algorithms/fcfs.hpp"
 #include "algorithms/sjf.hpp"
 #include "algorithms/rr.hpp"
@@ -14,16 +29,7 @@
 
 namespace schedulrx::core {
 
-    class IScheduler {
-    public:
-        virtual ~IScheduler() = default;
-        virtual models::SimulationResult simulate(
-            std::vector<models::Process> processes, 
-            const models::WorkloadSettings& settings,
-            const std::string& workload_id
-        ) = 0;
-    };
-
+    // 3. DEFINE THE FACTORY
     class SchedulerFactory {
     public:
         static std::unique_ptr<IScheduler> create(const std::string& algorithm_name) {
